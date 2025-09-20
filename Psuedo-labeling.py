@@ -663,7 +663,7 @@ def check_time_probability_consistency(df, iteration):
         # Check if any high probability patients have unexpectedly short expected times
         inconsistency_mask = high_prob_mask & (df[EXPECTED_TIME_COL] < THRESHOLD_TIME * 0.6)
         if inconsistency_mask.sum() > 0:
-            print(f"  ⚠️  {inconsistency_mask.sum()} inconsistencies detected")
+            print(f"   {inconsistency_mask.sum()} inconsistencies detected")
             print(f"  Min expected time for high prob: {df.loc[high_prob_mask, EXPECTED_TIME_COL].min():.1f} months")
     
     # Check if low probabilities correspond to short expected times
@@ -676,7 +676,7 @@ def check_time_probability_consistency(df, iteration):
         # Check if any low probability patients have unexpectedly long expected times
         inconsistency_mask = low_prob_mask & (df[EXPECTED_TIME_COL] > THRESHOLD_TIME * 0.8)
         if inconsistency_mask.sum() > 0:
-            print(f"  ⚠️  {inconsistency_mask.sum()} inconsistencies detected")
+            print(f"    {inconsistency_mask.sum()} inconsistencies detected")
             print(f"  Max expected time for low prob: {df.loc[low_prob_mask, EXPECTED_TIME_COL].max():.1f} months")
     
     # Check the overall correlation
@@ -949,7 +949,7 @@ for iteration in range(1, MAX_ITER + 1):
         break
         
     elif stagnation_count >= PATIENCE:
-        print(f"⏹️ Stopping due to stagnation after {PATIENCE} iterations")
+        print(f"Stopping due to stagnation after {PATIENCE} iterations")
         if stagnation_count == PATIENCE:
             print("Attempting final model reset...")
             # Clear memory before resetting
@@ -1013,4 +1013,5 @@ tf.keras.backend.clear_session()
 if 'models' in locals():
     for model in models:
         del model
+
 print("GPU memory cleared.")
