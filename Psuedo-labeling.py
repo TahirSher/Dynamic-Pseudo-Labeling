@@ -945,7 +945,7 @@ for iteration in range(1, MAX_ITER + 1):
         plot_deceased_probability_analysis(df, iteration)
     
     if r2_after >= TARGET_R2 and mae_after <= 0.01:
-        print(f"✓ Target metrics achieved: R2={r2_after:.4f} >= {TARGET_R2}, MAE={mae_after:.4f} <= 0.05")
+        print(f"Target metrics achieved: R2={r2_after:.4f} >= {TARGET_R2}, MAE={mae_after:.4f} <= 0.05")
         break
         
     elif stagnation_count >= PATIENCE:
@@ -1015,3 +1015,4 @@ if 'models' in locals():
         del model
 
 print("GPU memory cleared.")
+
