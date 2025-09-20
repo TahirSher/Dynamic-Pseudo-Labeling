@@ -53,8 +53,8 @@ else:
     device = torch.device("cpu")
     print("Using CPU")
 
-OUTPUT_DIR = "Final Test Sep-cindex updated-output"
-WEIGHTS_DIR = "Final Test-cindex updated-weights"
+OUTPUT_DIR = "20 Sep Test Sep-cindex updated-output"
+WEIGHTS_DIR = "20 Sep Test-cindex updated-weights"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(WEIGHTS_DIR, exist_ok=True)
 INPUT_FILE = os.path.join(OUTPUT_DIR, "optimized_survival_probabilities.csv")
@@ -364,7 +364,7 @@ def plot_time_dependent_performance(df, iteration, output_dir=OUTPUT_DIR):
     plt.fill_between(time_bins[:-1], 
                     np.array(avg_probs) - np.array(std_probs),
                     np.array(avg_probs) + np.array(std_probs),
-                    alpha=0.2, color='#4ECDC4', label='±1 Std Dev')
+                    alpha=0.2, color='#4ECDC4', label='(+/-)1 Std Dev')
     
     plt.xlabel('Time (months)', fontsize=12)
     plt.ylabel('Average Survival Probability', fontsize=12)
@@ -479,7 +479,7 @@ def plot_temporal_convergence(df, iteration, output_dir=OUTPUT_DIR):
         if mask.sum() > 0:
             plt.subplot(2, 2, i + 1)
             plt.hist(df.loc[mask, CALIBRATED_COL], bins=20, alpha=0.7, 
-                    label=f'{interval} ± 10 months', edgecolor='black')
+                    label=f'{interval} (+/-) 10 months', edgecolor='black')
             plt.xlabel('Survival Probability')
             plt.ylabel('Count')
             plt.title(f'Distribution at {interval} months - Iter {iteration}')
@@ -684,6 +684,7 @@ def check_time_probability_consistency(df, iteration):
     print(f"  Probability-Time correlation: {correlation:.4f}")
     
     return correlation
+
 # Load or initialize data
 if os.path.exists(INPUT_FILE):
     df = pd.read_csv(INPUT_FILE)
@@ -744,10 +745,6 @@ preprocessor = ColumnTransformer([
     ('cat', categorical_transformer, categorical_features)
 ])
 
-# Preprocess the data once to avoid data leakage
-X_processed = preprocessor.fit_transform(X)
-joblib.dump(preprocessor, PREPROCESSOR_FILE)
-
 # Clear GPU memory before starting
 tf.keras.backend.clear_session()
 
@@ -759,34 +756,53 @@ for iteration in range(1, MAX_ITER + 1):
     event = df[EVENT_COL]
     time = df[TIME_COL]
     
-    if iteration > 1:
-        if iteration % 3 == 0:
-            qt = QuantileTransformer(n_quantiles=min(100, len(y)), 
-                                   output_distribution='normal', random_state=42)
-            y_transformed = qt.fit_transform(y.values.reshape(-1, 1)).flatten()
-            y_transformed = (y_transformed - y_transformed.mean()) / y_transformed.std()
-            y = 1 / (1 + np.exp(-y_transformed))
-        else:
-            y = (y - y.min()) / (y.max() - y.min() + 1e-8)
-    
-    y = np.clip(y, 0.01, 0.99)
-    df[CALIBRATED_COL] = y
-    
-    # Split indices to avoid data leakage
+    # Split first to avoid data leakage
     indices = np.arange(len(X))
     train_idx, test_idx = train_test_split(
         indices, test_size=0.15, random_state=42, 
         stratify=event
     )
     
-    X_train_processed = X_processed[train_idx]
-    X_test_processed = X_processed[test_idx]
+    # Fit preprocessor ONLY on training data
+    X_train = X.iloc[train_idx]
+    X_test = X.iloc[test_idx]
+    
+    preprocessor.fit(X_train)
+    X_train_processed = preprocessor.transform(X_train)
+    X_test_processed = preprocessor.transform(X_test)
+    
     y_train = y.iloc[train_idx]
     y_test = y.iloc[test_idx]
     event_train = event.iloc[train_idx]
     event_test = event.iloc[test_idx]
     time_train = time.iloc[train_idx]
     time_test = time.iloc[test_idx]
+    
+    if iteration > 1:
+        if iteration % 3 == 0:
+            # Apply QuantileTransformer only on training data to avoid leakage
+            qt = QuantileTransformer(n_quantiles=min(100, len(y_train)), 
+                                   output_distribution='normal', random_state=42)
+            y_train_transformed = qt.fit_transform(y_train.values.reshape(-1, 1)).flatten()
+            y_train_transformed = (y_train_transformed - y_train_transformed.mean()) / y_train_transformed.std()
+            y_train = 1 / (1 + np.exp(-y_train_transformed))
+            
+            # Transform test data using the same fitted transformer
+            y_test_transformed = qt.transform(y_test.values.reshape(-1, 1)).flatten()
+            y_test_transformed = (y_test_transformed - y_test_transformed.mean()) / y_test_transformed.std()
+            y_test = 1 / (1 + np.exp(-y_test_transformed))
+        else:
+            # Normalize only training data and apply same transformation to test
+            train_min, train_max = y_train.min(), y_train.max()
+            y_train = (y_train - train_min) / (train_max - train_min + 1e-8)
+            y_test = (y_test - train_min) / (train_max - train_min + 1e-8)
+    
+    y_train = np.clip(y_train, 0.01, 0.99)
+    y_test = np.clip(y_test, 0.01, 0.99)
+    
+    # Update the main dataframe with normalized values
+    df.loc[train_idx, CALIBRATED_COL] = y_train
+    df.loc[test_idx, CALIBRATED_COL] = y_test
     
     sample_weights = compute_sample_weight('balanced', y_train)
     confidence_weights = 1.0 / (1.0 + np.abs(y_train - 0.5))
@@ -829,8 +845,8 @@ for iteration in range(1, MAX_ITER + 1):
         val_size = int(0.15 * len(X_train_processed))
         X_train_final = X_train_processed[:-val_size]
         X_val = X_train_processed[-val_size:]
-        y_train_final = y_train.iloc[:-val_size]
-        y_val = y_train.iloc[-val_size:]
+        y_train_final = y_train[:-val_size]
+        y_val = y_train[-val_size:]
         
         history = model.fit(
             X_train_final, y_train_final,
@@ -846,7 +862,8 @@ for iteration in range(1, MAX_ITER + 1):
         test_pred = model.predict(X_test_processed, verbose=0).flatten()
         all_test_preds.append(test_pred)
         
-        full_pred = model.predict(X_processed, verbose=0).flatten()
+        # Predict on full dataset for updating
+        full_pred = model.predict(preprocessor.transform(X), verbose=0).flatten()
         all_preds.append(full_pred)
     
     all_test_preds = np.array(all_test_preds)
@@ -859,10 +876,21 @@ for iteration in range(1, MAX_ITER + 1):
     y_pred_test = np.mean(all_test_preds[:, valid_mask], axis=0)
     y_pred_full = np.mean(all_preds, axis=0)
     
-    # Use time-dependent calibration
-    y_test_calibrated = time_dependent_calibration(y_test[valid_mask], y_pred_test, 
-                                                  event_test[valid_mask], time_test[valid_mask])
-    y_full_calibrated = time_dependent_calibration(y, y_pred_full, event, time)
+    # Use time-dependent calibration only on training data to avoid leakage
+    y_test_calibrated = time_dependent_calibration(
+        y_test[valid_mask], y_pred_test, 
+        event_test[valid_mask], time_test.iloc[valid_mask].values
+    )
+    
+    # For full dataset calibration, use only training data patterns
+    train_calibration_mask = np.isin(indices, train_idx)
+    y_train_for_calib = y.iloc[train_idx].values
+    y_pred_train_for_calib = y_pred_full[train_idx]
+    
+    # Create calibration model on training data only
+    iso = IsotonicRegression(out_of_bounds='clip', y_min=0.001, y_max=0.999)
+    iso.fit(y_pred_train_for_calib, y_train_for_calib)
+    y_full_calibrated = iso.predict(y_pred_full)
     
     # Use time-aware refinement
     y_full_calibrated = time_aware_refinement(df, y_full_calibrated, event, time, iteration=iteration)
@@ -914,7 +942,7 @@ for iteration in range(1, MAX_ITER + 1):
         if time_mask.sum() > 0:
             avg_prob = df.loc[time_mask, CALIBRATED_COL].mean()
             std_prob = df.loc[time_mask, CALIBRATED_COL].std()
-            print(f"  Time {critical_time} months: Avg prob = {avg_prob:.3f} ± {std_prob:.3f}")
+            print(f"  Time {critical_time} months: Avg prob = {avg_prob:.3f} (+/-) {std_prob:.3f}")
     
     track_deceased_convergence(df, iteration)
     plot_time_dependent_performance(df, iteration)
@@ -945,7 +973,7 @@ for iteration in range(1, MAX_ITER + 1):
         plot_deceased_probability_analysis(df, iteration)
     
     if r2_after >= TARGET_R2 and mae_after <= 0.01:
-        print(f"Target metrics achieved: R2={r2_after:.4f} >= {TARGET_R2}, MAE={mae_after:.4f} <= 0.05")
+        print(f"? Target metrics achieved: R2={r2_after:.4f} >= {TARGET_R2}, MAE={mae_after:.4f} <= 0.05")
         break
         
     elif stagnation_count >= PATIENCE:
@@ -983,13 +1011,21 @@ if os.path.exists(os.path.join(WEIGHTS_DIR, 'best_model_0.keras')):
         model = tf.keras.models.load_model(os.path.join(WEIGHTS_DIR, f'best_model_{i}.keras'))
         best_models.append(model)
     
+    # Preprocess the entire dataset using the fitted preprocessor
+    X_processed = preprocessor.transform(X)
+    
     final_preds = []
     for model in best_models:
         pred = model.predict(X_processed, verbose=0).flatten()
         final_preds.append(pred)
     
     final_y_pred = np.mean(final_preds, axis=0)
-    final_y_calibrated = time_dependent_calibration(y, final_y_pred, event, time)
+    
+    # Calibrate using training data only to avoid leakage
+    train_mask = np.isin(indices, train_idx)
+    iso_final = IsotonicRegression(out_of_bounds='clip', y_min=0.001, y_max=0.999)
+    iso_final.fit(final_y_pred[train_mask], y.iloc[train_idx].values)
+    final_y_calibrated = iso_final.predict(final_y_pred)
     
     df[TARGET_COL] = final_y_pred
     df[CALIBRATED_COL] = final_y_calibrated
@@ -1015,4 +1051,3 @@ if 'models' in locals():
         del model
 
 print("GPU memory cleared.")
-
