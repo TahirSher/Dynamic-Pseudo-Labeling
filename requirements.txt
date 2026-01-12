@@ -8,9 +8,7 @@ keras
 lifelines
 matplotlib
 seaborn
-
 joblib
 tqdm
-
 jupyter
 ipython
