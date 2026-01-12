@@ -1,18 +1,16 @@
-# Core Data & Scientific Computing
-pandas
 numpy
+pandas
 scipy
-
-# Machine Learning & Survival Analysis
 scikit-learn
-lifelines
 scikit-survival
-
-# Deep Learning Frameworks
 tensorflow
-torch
-
-# Utilities & Visualization
+keras
+lifelines
 matplotlib
-joblib
 seaborn
+
+joblib
+tqdm
+
+jupyter
+ipython
