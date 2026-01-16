@@ -35,7 +35,7 @@ EVENT_COL = 'Event'
 N_FOLDS = 5  
 CV_RANDOM_STATE = 42  
 
-ORIGINAL_DATASET_FILE = "/home/tahir/final_OS_dataset_01_final.csv"
+ORIGINAL_DATASET_FILE = "final_OS_dataset_01_final.csv"
 
 # SPARC output directory
 SPARC_OUTPUT_DIR = "14SPARC_CV_multi_threshold_survival_output"
@@ -1085,4 +1085,5 @@ def run_comprehensive_analysis():
     print(f"Results saved in: {BASE_OUTPUT_DIR}")
 
 if __name__ == "__main__":
+
     run_comprehensive_analysis()
