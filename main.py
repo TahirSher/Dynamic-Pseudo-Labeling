@@ -79,9 +79,6 @@ def main(dataset_path):
     
     all_results = {}
     
-    # ========================================================================
-    # TRAIN ALL THRESHOLDS AND SUBGROUPS
-    # ========================================================================
     print("\n" + "="*80)
     print("TRAINING PHASE")
     print("="*80)
@@ -124,9 +121,6 @@ def main(dataset_path):
         print(f"\n ERROR generating feature importance: {e}")
         traceback.print_exc()
     
-    # ========================================================================
-    # GENERATE COMPREHENSIVE SUMMARY
-    # ========================================================================
     print("\n" + "="*80)
     print("GENERATING SUMMARY REPORT")
     print("="*80)
@@ -137,10 +131,7 @@ def main(dataset_path):
     except Exception as e:
         print(f"\n ERROR generating summary: {e}")
         traceback.print_exc()
-    
-    # ========================================================================
-    # FINAL OUTPUT
-    # ========================================================================
+
     print("\n" + "="*80)
     print("ANALYSIS COMPLETE")
     print("="*80)
@@ -177,17 +168,12 @@ def main(dataset_path):
 
 if __name__ == "__main__":
 
-    # =======================================================================
-    # Dataset Path
-    # =======================================================================
     DATASET_PATH = "final_OS_dataset_01_final.csv"
     
-    # Command-line argument
     if len(sys.argv) > 1:
         DATASET_PATH = sys.argv[1]
     
     print(f"\nUsing dataset: {DATASET_PATH}\n")
-    
-    # Main analysis
 
     main(DATASET_PATH)
+
